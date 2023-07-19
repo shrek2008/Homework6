@@ -5,54 +5,50 @@ import shutil
 
 from normalize import normalize
 
-
-CATEGORIES = {
-    "Audio": [".mp3", ".ogg", ".wav", ".amr"],
-    "Archives": [".zip", ".gz", ".tar"],
-    "Documents": [".docx", ".txt", ".pdf", ".doc", ".xlsx", ".pptx"],
-    "Images": [".jpeg", ".png", ".jpg", ".svg"],
-    "Videos": [".avi", ".mp4", ".mov", ".mkv"],
-}
-
+CATEGORIES = {"Audio": [".mp3", ".ogg", ".wav", ".amr"],
+              "Documents": [".doc", ".docx", ".txt", ".pdf", ".xlsx", ".pptx"],
+              "Images": [".jpeg", ".png", ".jpg", ".svg"],
+              "Video": [".avi", ".mp4", ".mov", ".mkv"],
+              "Archives": [".zip", ".gz", ".tar"]}
 
 def move_file(file: Path, root_dir: Path, category: str) -> None:
     target_dir = root_dir.joinpath(category)
-    target_dir.mkdir(exist_ok=True)  # Create target directory if it doesn't exist
-    new_name = target_dir.joinpath(f"{normalize(file.stem)}{file.suffix}")
+    if not target_dir.exists():
+        print(f"Make {target_dir}")
+        target_dir.mkdir()
+    new_name = file.replace(target_dir.joinpath(normalize(file.stem), file.suffix))
     if new_name.exists():
         new_name = new_name.with_name(f"{new_name.stem}-{uuid.uuid4()}{file.suffix}")
-    shutil.move(file, new_name)
+    file.rename(new_name)
 
+def unpack_archives(path: Path):
+    for item in path.glob("**/*"):
+        if item.suffix.lower() in CATEGORIES["Archives"]:
+            archive_name = item.stem
+            extraction_dir = path.joinpath("archives", normalize(archive_name))
+            if not extraction_dir.exists():
+                print(f"Make {extraction_dir}")
+                extraction_dir.mkdir()
+            shutil.unpack_archive(item, extraction_dir)
 
-def get_categories(file: Path) -> str:
-    ext = file.suffix.lower()
+def get_categories(path: Path) -> str:
+    ext = path.suffix.lower()
     for cat, exts in CATEGORIES.items():
         if ext in exts:
             return cat
     return "Other"
 
-
-def delete_empty_folders(path: Path) -> None:
-    for item in path.glob("**/*"):
-        if item.is_dir() and not any(item.iterdir()):
-            item.rmdir()
-
+def delete_empty_folders(path: Path):
+    for folder in path.glob("**/"):
+        if folder.is_dir() and not any(folder.iterdir()):
+            print(f"Removing empty folder: {folder}")
+            folder.rmdir()
 
 def sort_folder(path: Path) -> None:
     for item in path.glob("**/*"):
         if item.is_file():
             cat = get_categories(item)
             move_file(item, path, cat)
-
-
-def unpack_archive(path: Path) -> None:
-    for item in path.glob("**/*"):
-        if item.is_file() and item.suffix.lower() in [".zip", ".gz", ".tar"]:
-            target_dir = item.with_suffix("")  # Remove the archive extension from the target directory name
-            target_dir.mkdir(exist_ok=True)  # Create target directory if it doesn't exist
-            shutil.unpack_archive(str(item), str(target_dir))
-            item.unlink()  # Remove the archive file after unpacking
-
 
 def main():
     try:
@@ -61,14 +57,12 @@ def main():
         return "No path to folder"
 
     if not path.exists():
-        return f"Folder with path {path} doesn't exist."
+        return f"Folder with path {path} does not exist"
 
     sort_folder(path)
     delete_empty_folders(path)
-    unpack_archive(path)
-
+    unpack_archives(path)
     return "All ok"
-
 
 if __name__ == "__main__":
     print(main())
